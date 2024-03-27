@@ -3,9 +3,11 @@ package com.landomen.sample.foregroundservice14
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -121,6 +123,15 @@ class MainActivity : ComponentActivity() {
 
     private fun onStartOrStopForegroundServiceClick() {
         if (exampleService == null) {
+
+            if (!Settings.canDrawOverlays(this)) {
+                // Overlay permission is not granted, request the permission from the user
+                Toast.makeText(this, "Need to be able to draw over other apps", Toast.LENGTH_SHORT).show()
+                // See: https://developer.android.com/reference/android/provider/Settings#ACTION_MANAGE_OVERLAY_PERMISSION
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                return
+            }
+
             // service is not yet running, start it after permission check
             locationPermissionRequest.launch(
                 arrayOf(

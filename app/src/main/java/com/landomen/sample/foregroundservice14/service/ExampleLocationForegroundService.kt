@@ -3,12 +3,18 @@ package com.landomen.sample.foregroundservice14.service
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.Point
 import android.location.Location
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
+import android.view.Gravity
+import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.core.app.ServiceCompat
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -28,6 +34,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.max
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -71,6 +78,7 @@ class ExampleLocationForegroundService : Service() {
 
         setupLocationUpdates()
         startServiceRunningTicker()
+        setupColorFilter(true)
     }
 
     override fun onDestroy() {
@@ -82,6 +90,7 @@ class ExampleLocationForegroundService : Service() {
         coroutineScope.coroutineContext.cancelChildren()
 
         Toast.makeText(this, "Foreground Service destroyed", Toast.LENGTH_SHORT).show()
+        setupColorFilter(false)
     }
 
     /**
@@ -169,6 +178,62 @@ class ExampleLocationForegroundService : Service() {
             delay(period)
         }
     }
+
+    var mLayout: FrameLayout? = null
+
+    // Setting up the overlay to draw on top of status bar and navigation bar can be tricky
+    // See: https://stackoverflow.com/questions/21380167/draw-bitmaps-on-top-of-the-navigation-bar-in-android
+    // See: https://stackoverflow.com/questions/31516089/draw-over-navigation-bar-and-other-apps-on-android-version-5
+    // See: https://stackoverflow.com/questions/50677833/full-screen-type-accessibility-overlay
+    //
+    private fun setupColorFilter(on: Boolean) {
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        if (on && mLayout == null) {
+            //mLayout = new FxOverlay(this);
+            mLayout = FrameLayout(this)
+
+            // Fetch screen size to work out our overlay size
+            val display = wm.defaultDisplay
+            val size = Point()
+            display.getSize(size)
+            // We need it to be large enough to cover navigation bar both in portrait and landscape
+            // Doing Math.max here didn't work for whatever reason
+            val width = size.x + 500
+            val height = size.y + 500
+            val lp = WindowManager.LayoutParams()
+            // We need to explicitly specify our extent so as to make sure we cover the navigation bar
+            lp.width = max(width.toDouble(), height.toDouble()).toInt()
+            lp.height = max(width.toDouble(), height.toDouble()).toInt()
+            lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            lp.format = PixelFormat.TRANSLUCENT
+            lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+
+            // We don't want to capture input
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+
+
+            //lp.flags |= WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_FULLSCREEN
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            lp.gravity = Gravity.TOP
+            wm.addView(mLayout, lp)
+        }
+        else if (!on && mLayout != null) {
+            // Disable our overlay
+            wm.removeView(mLayout)
+            mLayout = null
+            //mColorLayout = null;
+        }
+
+            //val blackAlpha = ColorUtils.setAlphaComponent(0, 0xFF - 0x88)
+            //mLayout?.setBackgroundColor(ColorUtils.compositeColors(blackAlpha, 0xFFFF0000))
+            mLayout?.setBackgroundColor(Color.argb(0x88, 0xFF, 0, 0))
+
+    }
+
 
     companion object {
         private const val TAG = "ExampleForegroundService"
